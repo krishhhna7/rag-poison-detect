@@ -81,6 +81,40 @@ def load_targets(path: str, drop_binary: bool = False) -> List[Target]:
     return out
 
 
+def stream_subcorpus(path: str, gold_ids: List[str], n_total: int, seed: int = 0) -> Tuple[List[str], List[str]]:
+    """One pass over a BEIR corpus.jsonl: keep all gold passages + a uniform random sample of the rest.
+
+    Reservoir sampling means the multi-million-passage corpus is never held in memory
+    (important on free Colab, ~12 GB RAM). Returns (ids, texts) with gold passages first.
+    """
+    rng = random.Random(seed)
+    gold_set = set(map(str, gold_ids))
+    k = max(0, n_total - len(gold_set))
+    gold, reservoir, seen = {}, [], 0
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            pid = str(r["_id"])
+            title = (r.get("title") or "").strip()
+            text = (r.get("text") or "").strip()
+            doc = f"{title}. {text}" if title else text
+            if pid in gold_set:
+                gold[pid] = doc
+                continue
+            seen += 1
+            if len(reservoir) < k:
+                reservoir.append((pid, doc))
+            else:
+                j = rng.randrange(seen)
+                if j < k:
+                    reservoir[j] = (pid, doc)
+    ids = list(gold) + [i for i, _ in reservoir]
+    texts = [gold[i] for i in gold] + [d for _, d in reservoir]
+    return ids, texts
+
+
 def build_subcorpus(corpus: Dict[str, str], gold_ids: List[str], n_total: int,
                     seed: int = 0) -> Tuple[List[str], List[str]]:
     """Gold passages + random distractors up to ``n_total`` passages."""

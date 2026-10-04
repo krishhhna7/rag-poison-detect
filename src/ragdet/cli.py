@@ -18,7 +18,7 @@ import pandas as pd
 from . import pipeline as P
 from .config import load_config
 from .core import set_seed
-from .data import build_subcorpus, load_beir_corpus, load_qrels, load_targets, make_toy_dataset, read_jsonl
+from .data import load_qrels, load_targets, make_toy_dataset, read_jsonl, stream_subcorpus
 from .retrieval import Retriever, build_embedder
 
 
@@ -35,13 +35,13 @@ def build_components(cfg):
                     ppl_fn=UnigramPerplexity(texts))
     from .generation import HFGenerator
     from .perplexity import HFPerplexity
-    corpus = load_beir_corpus(cfg.data.corpus_path)
     targets = load_targets(cfg.data.targets_path, getattr(cfg.data, "drop_binary", False))[: cfg.data.n_targets]
     qrels = load_qrels(cfg.data.qrels_path)   # query id -> gold corpus ids (ids differ from query ids)
     gold = [g for t in targets for g in qrels.get(t.qid, [])]
     missing = sum(t.qid not in qrels for t in targets)
     print(f"{len(targets)} targets, {len(gold)} gold passages, {missing} targets without qrels")
-    ids, texts = build_subcorpus(corpus, gold, cfg.data.corpus_size, cfg.seed)
+    ids, texts = stream_subcorpus(cfg.data.corpus_path, gold, cfg.data.corpus_size, cfg.seed)
+    print(f"sub-corpus: {len(ids)} passages")
     emb = build_embedder(cfg.retriever)
     cache = os.path.join(cfg.paths.workspace, "cache", f"{cfg.data.dataset}_{cfg.retriever.name}_{len(ids)}.npy")
     ret = Retriever.build(emb, ids, texts, cache)
@@ -66,8 +66,21 @@ def cmd_attack(cfg, c):
 
 
 def cmd_features(cfg, c):
-    tiers = {t: P.load_sets(cfg, t) for t in ("clean", "A0", "A1") if os.path.exists(P.out_path(cfg, f"sets_{t}.jsonl"))}
-    df = P.build_features(cfg, tiers, c["embedder"], c["ppl_fn"], c["generator"])
+    """Per-tier feature files are cached, so re-running after a disconnect skips finished tiers."""
+    frames = []
+    for tier in ("clean", "A0", "A1"):
+        sets_file = P.out_path(cfg, f"sets_{tier}.jsonl")
+        if not os.path.exists(sets_file):
+            continue
+        cache = P.out_path(cfg, f"features_{tier}.csv")
+        if os.path.exists(cache):
+            print(f"[{tier}] using cached {cache}")
+            frames.append(pd.read_csv(cache))
+            continue
+        df_t = P.build_features(cfg, {tier: P.load_sets(cfg, tier)}, c["embedder"], c["ppl_fn"], c["generator"])
+        df_t.to_csv(cache, index=False)
+        frames.append(df_t)
+    df = pd.concat(frames, ignore_index=True)
     df.to_csv(_feat_path(cfg), index=False)
     print("wrote", _feat_path(cfg), df.shape)
 

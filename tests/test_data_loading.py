@@ -64,3 +64,15 @@ def test_a0_uses_released_texts_and_prepends_question():
 def test_real_target_file_parses():
     ts = load_targets(os.environ["RAGDET_REAL_TARGETS"])
     assert len(ts) == 100 and all(len(t.adv_texts) == 5 for t in ts)
+
+
+def test_stream_subcorpus_keeps_gold_and_samples_rest(tmp_path):
+    from ragdet.data import stream_subcorpus
+    f = tmp_path / "corpus.jsonl"
+    f.write_text("\n".join(json.dumps({"_id": str(i), "title": f"T{i}", "text": f"body {i}"}) for i in range(500)))
+    ids, texts = stream_subcorpus(str(f), ["7", "123", "499"], n_total=50, seed=1)
+    assert len(ids) == 50 and len(set(ids)) == 50
+    assert ids[:3] == ["7", "123", "499"] or set(ids[:3]) == {"7", "123", "499"}   # gold first
+    assert texts[ids.index("7")] == "T7. body 7"
+    ids2, _ = stream_subcorpus(str(f), ["7", "123", "499"], n_total=50, seed=1)
+    assert ids == ids2                                                            # deterministic

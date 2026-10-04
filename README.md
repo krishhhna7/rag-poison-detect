@@ -35,6 +35,14 @@ pytest -q
 RAGDET_ROOT=./workspace python -m ragdet.cli toy --config configs/toy.yaml
 ```
 
+## Running on Colab (free T4)
+Open `notebooks/colab_run.ipynb` in Colab (GitHub tab, or
+`https://colab.research.google.com/github/krishhhna7/rag-poison-detect/blob/main/notebooks/colab_run.ipynb`),
+choose a T4 GPU runtime and run the cells in order. Uses `configs/small_gpu.yaml` (Qwen2.5-3B in fp16,
+NQ only). Results and the model cache are stored on Google Drive. Do the 10-question run first.
+Finished stages are cached on disk (`sets_*.jsonl`, `features_<tier>.csv`): if you change the attack,
+use a new `run_name` or delete the cached files.
+
 ## Real run
 1. **Data** (verified formats; see "Data sources" below):
    `source setup_env.sh && bash scripts/download_data.sh nq`

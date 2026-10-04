@@ -85,7 +85,7 @@ class HFGenerator:
         enc = self.tok(text, return_tensors="pt", add_special_tokens=False).to(self.model.device)
         gen_kwargs = dict(max_new_tokens=max_new_tokens, do_sample=temperature > 0,
                           num_return_sequences=n, pad_token_id=self.tok.eos_token_id,
-                          return_dict_in_generate=True, output_scores=True)
+                          return_dict_in_generate=True)
         if temperature > 0:
             gen_kwargs.update(temperature=temperature, top_p=0.95)
         with torch.no_grad():
@@ -122,13 +122,13 @@ class HFGenerator:
             return 0.0, 0.0, 0.0, None
         with torch.no_grad():
             out = self.model(input_ids=ids, output_attentions=want_attention)
-        logits = out.logits[0].float()
-        logp = torch.log_softmax(logits, dim=-1)
-        # token at position t is predicted by logits at t-1
+        # token at position t is predicted by logits at t-1. Select answer positions BEFORE
+        # casting/softmax so we never materialise a [T, vocab] float32 matrix (huge for 150k vocab).
         pred_pos = [p - 1 for p in ans_pos]
-        tok_lp = logp[pred_pos, ids[0, ans_pos]]
-        probs = logp[pred_pos].exp()
-        ent = -(probs * logp[pred_pos]).sum(-1)
+        sel = out.logits[0, pred_pos].float()                      # [n_answer_tokens, vocab]
+        logp = torch.log_softmax(sel, dim=-1)
+        tok_lp = logp[torch.arange(len(ans_pos), device=logp.device), ids[0, ans_pos]]
+        ent = -(logp.exp() * logp).sum(-1)
         attn = None
         if want_attention:
             L = len(out.attentions)
