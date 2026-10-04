@@ -129,3 +129,11 @@ def test_split_fpr_and_within_auroc():
     assert m["auroc_within"] == 1.0                                   # poison outranks its neighbours
     df = pd.DataFrame({"qid": ["a"] * 2 + ["b"] * 2, "tier": "clean", "label": 0, "s": [0.9, 0.1, 0.1, 0.1]})
     assert query_level_false_alarm(df, "s", 0.5) == 0.5               # 1 of 2 clean sets raised an alarm
+
+
+def test_calibration_uses_only_clean_sets():
+    from ragdet.evaluate import calibration_frame
+    df = pd.DataFrame({"qid": ["a", "a", "b", "b", "c"], "tier": ["clean", "A0", "clean", "A0", "clean"],
+                       "label": [0, 0, 0, 1, 0]})
+    cal = calibration_frame(df, {"a", "b"})
+    assert list(cal.index) == [0, 2]            # clean-set benign passages of calibration questions only

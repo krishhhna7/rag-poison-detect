@@ -128,6 +128,13 @@ def paired_diff(a: np.ndarray, b: np.ndarray):
     return float(d.mean()), lo, hi, float(min(p, 1.0))
 
 
+def calibration_frame(df: pd.DataFrame, cal_qids) -> pd.DataFrame:
+    """Benign passages used to set the threshold: passages of CLEAN retrieved sets for calibration
+    questions only. This matches what ``fpr_clean`` measures (false alarms on benign queries). Benign
+    passages sitting next to poison come from a different population and are reported as ``fpr_mixed``."""
+    return df[(df["tier"] == "clean") & df["qid"].isin(cal_qids) & (df["label"] == 0)]
+
+
 # ---- protocol -------------------------------------------------------------
 def run_protocol(df: pd.DataFrame, detectors: Dict[str, object], seed: int, fpr_target: float = 0.01,
                  train_tiers=("A0",), test_tiers=("A0", "A1", "A2"), n_boot: int = 1000,
@@ -136,7 +143,7 @@ def run_protocol(df: pd.DataFrame, detectors: Dict[str, object], seed: int, fpr_
     fit_q, cal_q, test_q = split_qids(df["qid"], seed, frac)
     is_train_tier = df["tier"].isin(list(train_tiers) + ["clean"])
     fit_df = df[is_train_tier & df["qid"].isin(fit_q)]
-    cal_df = df[is_train_tier & df["qid"].isin(cal_q) & (df["label"] == 0)]
+    cal_df = calibration_frame(df, cal_q)
 
     scores, thr = {}, {}
     test_df_all = df[df["qid"].isin(test_q)].copy()
