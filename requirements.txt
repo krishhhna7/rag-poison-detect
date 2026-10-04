@@ -1,0 +1,11 @@
+numpy
+pandas
+scikit-learn
+pyyaml
+tqdm
+pytest
+# GPU stages only (not needed for the toy run or unit tests):
+torch
+transformers>=4.44
+accelerate
+bitsandbytes   # only if generator.load_4bit=true

@@ -1,0 +1,11 @@
+# CPU-only plumbing check with test doubles. Numbers from this config mean NOTHING scientifically.
+run_name: toy
+seed: 0
+paths: {workspace: "${RAGDET_ROOT}"}
+data: {dataset: toy, n_targets: 20, corpus_size: 200}
+retriever: {name: hashing, dim: 512, top_k: 5}
+generator: {}
+ppl: {}
+attack: {n_poison: 3, n_candidates: 3}
+detector: {model: logreg, fpr_target: 0.05}
+eval: {seeds: [0, 1], n_boot: 100, split: [0.5, 0.2, 0.3], train_tiers: [A0], test_tiers: [A0, A1, A2]}

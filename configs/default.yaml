@@ -1,0 +1,37 @@
+# Main experiment config (cluster / 24GB GPU). Override on the CLI: --set generator.hf_id=Qwen/Qwen2.5-3B-Instruct
+run_name: nq_qwen7b_contriever
+seed: 0
+paths:
+  workspace: "${RAGDET_ROOT}"        # set to the large-storage area on the cluster
+data:
+  dataset: nq                        # nq | hotpotqa | toy
+  corpus_path: "${RAGDET_ROOT}/data/nq/corpus.jsonl"       # BEIR-format corpus (see README)
+  targets_path: "${RAGDET_ROOT}/data/nq/targets.jsonl"     # PoisonedRAG-format targets (see README)
+  n_targets: 100
+  corpus_size: 100000                # sub-corpus = gold + random distractors (documented limitation)
+retriever:
+  name: contriever                   # contriever | bge | hashing
+  hf_id: facebook/contriever
+  pooling: mean
+  normalize: false
+  top_k: 5
+generator:
+  hf_id: Qwen/Qwen2.5-7B-Instruct
+  dtype: bfloat16
+  max_new_tokens: 24
+  load_4bit: false
+  attn_layers: last_half
+ppl:
+  hf_id: gpt2
+attack:
+  n_poison: 5                        # ablate over {1, 3, 5}
+  n_candidates: 8                    # rewrites per slot for A1/A2
+detector:
+  model: logreg                      # logreg | gbdt
+  fpr_target: 0.01
+eval:
+  seeds: [0, 1, 2]
+  n_boot: 1000
+  split: [0.5, 0.2, 0.3]             # fit / calibrate / test, split by question
+  train_tiers: [A0]
+  test_tiers: [A0, A1, A2]
