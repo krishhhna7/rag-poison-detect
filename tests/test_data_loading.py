@@ -76,3 +76,16 @@ def test_stream_subcorpus_keeps_gold_and_samples_rest(tmp_path):
     assert texts[ids.index("7")] == "T7. body 7"
     ids2, _ = stream_subcorpus(str(f), ["7", "123", "499"], n_total=50, seed=1)
     assert ids == ids2                                                            # deterministic
+
+
+def test_cached_subcorpus_builds_once_then_needs_no_corpus(tmp_path):
+    from ragdet.data import cached_subcorpus
+    corpus = tmp_path / "corpus.jsonl"
+    corpus.write_text("\n".join(json.dumps({"_id": str(i), "title": "", "text": f"body {i}"}) for i in range(200)))
+    cache = str(tmp_path / "cache")
+    ids1, texts1, key1 = cached_subcorpus(str(corpus), ["5", "9"], 30, 0, cache)
+    corpus.unlink()                                        # raw corpus gone (as after a Colab restart)
+    ids2, texts2, key2 = cached_subcorpus(str(corpus), ["5", "9"], 30, 0, cache)
+    assert (ids1, texts1, key1) == (ids2, texts2, key2) and len(ids1) == 30
+    with pytest.raises(FileNotFoundError):                 # different gold set -> needs the raw corpus
+        cached_subcorpus(str(corpus), ["7"], 30, 0, cache)

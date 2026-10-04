@@ -39,14 +39,15 @@ RAGDET_ROOT=./workspace python -m ragdet.cli toy --config configs/toy.yaml
 Open `notebooks/colab_run.ipynb` in Colab (GitHub tab, or
 `https://colab.research.google.com/github/krishhhna7/rag-poison-detect/blob/main/notebooks/colab_run.ipynb`),
 choose a T4 GPU runtime and run the cells in order. Uses `configs/small_gpu.yaml` (Qwen2.5-3B in fp16,
-NQ only). Results and the model cache are stored on Google Drive. Do the 10-question run first.
+NQ only). The raw 1.5 GB corpus is kept on Colab's disposable local disk and only read once by the `prepare` stage; the small sub-corpus, embeddings, models and results are stored on Google Drive. Do the 10-question run first.
 Finished stages are cached on disk (`sets_*.jsonl`, `features_<tier>.csv`): if you change the attack,
 use a new `run_name` or delete the cached files.
 
 ## Real run
 1. **Data** (verified formats; see "Data sources" below):
    `source setup_env.sh && bash scripts/download_data.sh nq`
-   gives `$RAGDET_ROOT/data/nq/{corpus.jsonl, qrels/test.tsv, targets.json}`.
+   puts the raw corpus in `$RAGDET_DATA/nq/` (disposable) and the small files (qrels, targets) in
+   `$RAGDET_ROOT/data_small/nq/`. Then run `python -m ragdet.cli prepare --config ...` once to cache the sub-corpus + embeddings.
 2. `bash scripts/run_all.sh configs/default.yaml` (or `configs/small_gpu.yaml`, `configs/hotpotqa.yaml`).
 3. Outputs land in `$RAGDET_ROOT/runs/<run_name>/`: `sets_*.jsonl`, `features.csv`,
    `results_raw.csv` (per seed, with bootstrap CIs and paired tests), `results_summary.csv`.

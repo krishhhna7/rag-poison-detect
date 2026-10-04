@@ -5,9 +5,9 @@ paths:
   workspace: "${RAGDET_ROOT}"
 data:
   dataset: nq
-  corpus_path: "${RAGDET_ROOT}/data/nq/corpus.jsonl"
-  qrels_path: "${RAGDET_ROOT}/data/nq/qrels/test.tsv"
-  targets_path: "${RAGDET_ROOT}/data/nq/targets.json"
+  corpus_path: "${RAGDET_DATA}/nq/corpus.jsonl"
+  qrels_path: "${RAGDET_ROOT}/data_small/nq/qrels_test.tsv"
+  targets_path: "${RAGDET_ROOT}/data_small/nq/targets.json"
   n_targets: 100
   corpus_size: 50000
 retriever: {name: contriever, hf_id: facebook/contriever, pooling: mean, normalize: false, top_k: 5}

@@ -5,9 +5,9 @@ paths:
   workspace: "${RAGDET_ROOT}"        # set to the large-storage area on the cluster
 data:
   dataset: hotpotqa                        # nq | hotpotqa | toy
-  corpus_path: "${RAGDET_ROOT}/data/hotpotqa/corpus.jsonl"       # BEIR-format corpus (see README)
-  qrels_path: "${RAGDET_ROOT}/data/hotpotqa/qrels/test.tsv"       # BEIR qrels: maps query id -> gold passages
-  targets_path: "${RAGDET_ROOT}/data/hotpotqa/targets.json"       # PoisonedRAG release file (see README)
+  corpus_path: "${RAGDET_DATA}/hotpotqa/corpus.jsonl"       # BEIR-format corpus (see README)
+  qrels_path: "${RAGDET_ROOT}/data_small/hotpotqa/qrels_test.tsv"       # BEIR qrels: maps query id -> gold passages
+  targets_path: "${RAGDET_ROOT}/data_small/hotpotqa/targets.json"       # PoisonedRAG release file (see README)
   n_targets: 100
   drop_binary: true                  # yes/no answers are matched too easily by chance (85 of 100 remain)
   corpus_size: 100000                # sub-corpus = gold + random distractors (documented limitation)

@@ -8,7 +8,9 @@ documented scale limitation (see README and the report's limitations section).
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import random
 from typing import Dict, List, Tuple
 
@@ -91,8 +93,12 @@ def stream_subcorpus(path: str, gold_ids: List[str], n_total: int, seed: int = 0
     gold_set = set(map(str, gold_ids))
     k = max(0, n_total - len(gold_set))
     gold, reservoir, seen = {}, [], 0
+    try:
+        from tqdm import tqdm
+    except ImportError:
+        tqdm = lambda x, **kw: x  # noqa: E731
     with open(path, "r", encoding="utf-8") as f:
-        for line in f:
+        for line in tqdm(f, desc="reading corpus", unit=" passages", mininterval=5):
             if not line.strip():
                 continue
             r = json.loads(line)
@@ -154,3 +160,25 @@ def make_toy_dataset(n_targets: int = 20, n_distractors: int = 200, seed: int = 
         texts.append(f"The {t} region of {c} is known for its long history, local traditions and "
                      f"seasonal visitors. Number {j} in the regional survey of {t} sites.")
     return ids, texts, targets
+
+
+def cached_subcorpus(corpus_path: str, gold_ids: List[str], n_total: int, seed: int, cache_dir: str):
+    """Build the sub-corpus once, store it as a small JSONL, and reuse it afterwards.
+
+    After the first build the 1.5 GB raw corpus is no longer needed, so it can live on a
+    disposable disk. Returns (ids, texts, cache_key); the key also names the embedding cache.
+    """
+    key = hashlib.md5(("|".join(sorted(set(map(str, gold_ids)))) + f"#{n_total}#{seed}").encode()).hexdigest()[:12]
+    path = os.path.join(cache_dir, f"subcorpus_{key}.jsonl")
+    if os.path.exists(path):
+        rows = read_jsonl(path)
+        return [r["id"] for r in rows], [r["text"] for r in rows], key
+    if not os.path.exists(corpus_path):
+        raise FileNotFoundError(
+            f"Sub-corpus cache {path} not found and raw corpus {corpus_path} is missing. "
+            "Run the data download cell (scripts/download_data.sh) first.")
+    ids, texts = stream_subcorpus(corpus_path, gold_ids, n_total, seed)
+    os.makedirs(cache_dir, exist_ok=True)
+    write_jsonl(path + ".tmp", [{"id": i, "text": t} for i, t in zip(ids, texts)])
+    os.replace(path + ".tmp", path)          # atomic: a disconnect never leaves a half-written cache
+    return ids, texts, key

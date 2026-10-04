@@ -1,6 +1,7 @@
 """Command line entry point:  python -m ragdet.cli <stage> --config configs/xxx.yaml
 
 Stages (each saves to <workspace>/runs/<run_name>/ so a crashed job can resume):
+  prepare   build + cache the sub-corpus and passage embeddings (GPU helps; run once)
   attack    build clean / A0 / A1 retrieved sets
   features  extract per-passage features for all sets currently on disk
   a2        run the detector-in-the-loop attack, then append A2 features
@@ -18,11 +19,11 @@ import pandas as pd
 from . import pipeline as P
 from .config import load_config
 from .core import set_seed
-from .data import load_qrels, load_targets, make_toy_dataset, read_jsonl, stream_subcorpus
+from .data import cached_subcorpus, load_qrels, load_targets, make_toy_dataset
 from .retrieval import Retriever, build_embedder
 
 
-def build_components(cfg):
+def build_components(cfg, need_generator: bool = True):
     """Instantiate corpus, retriever, generator, perplexity scorer. Heavy imports are lazy."""
     if cfg.data.dataset == "toy":
         from .generation import ToyGenerator
@@ -33,26 +34,39 @@ def build_components(cfg):
         gen = ToyGenerator()
         return dict(targets=targets, retriever=ret, embedder=emb, generator=gen, llm=gen,
                     ppl_fn=UnigramPerplexity(texts))
-    from .generation import HFGenerator
     from .perplexity import HFPerplexity
-    targets = load_targets(cfg.data.targets_path, getattr(cfg.data, "drop_binary", False))[: cfg.data.n_targets]
+    all_targets = load_targets(cfg.data.targets_path, getattr(cfg.data, "drop_binary", False))
     qrels = load_qrels(cfg.data.qrels_path)   # query id -> gold corpus ids (ids differ from query ids)
-    gold = [g for t in targets for g in qrels.get(t.qid, [])]
-    missing = sum(t.qid not in qrels for t in targets)
-    print(f"{len(targets)} targets, {len(gold)} gold passages, {missing} targets without qrels")
-    ids, texts = stream_subcorpus(cfg.data.corpus_path, gold, cfg.data.corpus_size, cfg.seed)
-    print(f"sub-corpus: {len(ids)} passages")
+    # Gold passages for ALL targets go in the sub-corpus, so a 10-question test run and the full run
+    # share one cached sub-corpus and one embedding file (the raw corpus is then needed only once).
+    gold = [g for t in all_targets for g in qrels.get(t.qid, [])]
+    missing = sum(t.qid not in qrels for t in all_targets)
+    targets = all_targets[: cfg.data.n_targets]
+    print(f"{len(targets)} targets used ({len(all_targets)} in file), {len(gold)} gold passages, "
+          f"{missing} targets without qrels", flush=True)
+    cache_dir = os.path.join(cfg.paths.workspace, "cache")
+    ids, texts, key = cached_subcorpus(cfg.data.corpus_path, gold, cfg.data.corpus_size, cfg.seed, cache_dir)
+    print(f"sub-corpus: {len(ids)} passages (key {key})", flush=True)
     emb = build_embedder(cfg.retriever)
-    cache = os.path.join(cfg.paths.workspace, "cache", f"{cfg.data.dataset}_{cfg.retriever.name}_{len(ids)}.npy")
+    cache = os.path.join(cache_dir, f"emb_{cfg.retriever.name}_{key}.npy")
     ret = Retriever.build(emb, ids, texts, cache)
+    print("retriever ready", flush=True)
+    if not need_generator:
+        return dict(targets=targets, retriever=ret, embedder=emb)
+    from .generation import HFGenerator
     gen = HFGenerator(cfg.generator.hf_id, cfg.generator.dtype, cfg.generator.max_new_tokens,
                       cfg.generator.load_4bit, cfg.generator.attn_layers)
+    print("generator ready", flush=True)
     return dict(targets=targets, retriever=ret, embedder=emb, generator=gen, llm=gen,
                 ppl_fn=HFPerplexity(cfg.ppl.hf_id))
 
 
 def _feat_path(cfg):
     return P.out_path(cfg, "features.csv")
+
+
+def cmd_prepare(cfg, c):
+    print("Prepare done: sub-corpus and embeddings are cached. The raw 1.5 GB corpus is no longer needed.")
 
 
 def cmd_attack(cfg, c):
@@ -114,7 +128,7 @@ def cmd_toy(cfg, c):
     print("\nNOTE: toy run uses test doubles; these numbers only prove the plumbing works.")
 
 
-STAGES = {"attack": cmd_attack, "features": cmd_features, "a2": cmd_a2, "evaluate": cmd_evaluate, "toy": cmd_toy}
+STAGES = {"prepare": cmd_prepare, "attack": cmd_attack, "features": cmd_features, "a2": cmd_a2, "evaluate": cmd_evaluate, "toy": cmd_toy}
 
 
 def main(argv=None):
@@ -133,7 +147,7 @@ def main(argv=None):
         ov[k] = v
     cfg = load_config(a.config, ov)
     set_seed(cfg.seed)
-    comps = None if a.stage == "evaluate" else build_components(cfg)
+    comps = None if a.stage == "evaluate" else build_components(cfg, need_generator=a.stage != "prepare")
     STAGES[a.stage](cfg, comps)
 
 

@@ -5,9 +5,9 @@ paths:
   workspace: "${RAGDET_ROOT}"        # set to the large-storage area on the cluster
 data:
   dataset: nq                        # nq | hotpotqa | toy
-  corpus_path: "${RAGDET_ROOT}/data/nq/corpus.jsonl"       # BEIR-format corpus (see README)
-  qrels_path: "${RAGDET_ROOT}/data/nq/qrels/test.tsv"       # BEIR qrels: maps query id -> gold passages
-  targets_path: "${RAGDET_ROOT}/data/nq/targets.json"       # PoisonedRAG release file (see README)
+  corpus_path: "${RAGDET_DATA}/nq/corpus.jsonl"       # BEIR-format corpus (see README)
+  qrels_path: "${RAGDET_ROOT}/data_small/nq/qrels_test.tsv"       # BEIR qrels: maps query id -> gold passages
+  targets_path: "${RAGDET_ROOT}/data_small/nq/targets.json"       # PoisonedRAG release file (see README)
   n_targets: 100
   corpus_size: 100000                # sub-corpus = gold + random distractors (documented limitation)
 retriever:

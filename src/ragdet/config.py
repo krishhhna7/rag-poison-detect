@@ -34,6 +34,9 @@ def _expand(obj: Any) -> Any:
 
 def load_config(path: str, overrides: dict | None = None) -> SimpleNamespace:
     os.environ.setdefault("RAGDET_ROOT", os.path.abspath("./workspace"))
+    # RAGDET_DATA holds the big raw corpus (disposable, e.g. Colab local disk); RAGDET_ROOT holds
+    # everything that must survive a disconnect (small files, caches, runs).
+    os.environ.setdefault("RAGDET_DATA", os.path.join(os.environ["RAGDET_ROOT"], "data"))
     with open(path, "r") as f:
         raw = yaml.safe_load(f)
     if overrides:

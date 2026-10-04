@@ -60,7 +60,11 @@ class HFEmbedder:
         torch = self.torch
         outs = []
         texts = [(self.query_prefix + t) if is_query else t for t in texts]
-        for i in range(0, len(texts), batch_size):
+        starts = range(0, len(texts), batch_size)
+        if len(texts) > 2000:
+            from tqdm import tqdm
+            starts = tqdm(starts, desc="embedding passages", unit=" batches", mininterval=5)
+        for i in starts:
             batch = self.tok(list(texts[i:i + batch_size]), padding=True, truncation=True,
                              max_length=self.max_length, return_tensors="pt").to(self.device)
             with torch.no_grad():
