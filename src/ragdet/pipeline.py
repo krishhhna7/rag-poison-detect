@@ -15,7 +15,7 @@ import hashlib
 from .data import append_jsonl, read_jsonl, write_jsonl
 from .evaluate import run_protocol, split_qids
 from .features import extract_all, extract_set_features
-from .detector import LearnedDetector, build_detectors, calibrate_threshold
+from .detector import LearnedDetector, ablations, build_detectors, calibrate_threshold
 from .features import feature_groups
 
 
@@ -122,7 +122,7 @@ def build_features(cfg, sets_by_tier: Dict[str, List[RetrievedSet]], embedder, p
 # ---- stage 3: A2 (detector-in-the-loop) ------------------------------------------------
 def fit_attacker_detector(cfg, feat_df: pd.DataFrame, seed: int):
     """The detector an A2 attacker can query: fusion fitted on A0+clean fit-split questions."""
-    fit_q, _, _ = split_qids(feat_df["qid"], seed, tuple(cfg.eval.split))
+    fit_q, _, _ = split_qids(feat_df["qid"], seed, tuple(getattr(cfg.eval, "split", (0.5, 0.2, 0.3))))
     df = feat_df[feat_df["tier"].isin(["A0", "clean"]) & feat_df["qid"].isin(fit_q)]
     return build_detectors(cfg.detector.model, seed)["fusion"].fit(df)
 
@@ -160,21 +160,45 @@ def build_a2_sets(cfg, targets: List[Target], a0_sets: List[RetrievedSet], retri
 
 
 # ---- stage 4: evaluation -----------------------------------------------------------------
-def evaluate_all(cfg, feat_df: pd.DataFrame) -> pd.DataFrame:
-    frames = []
-    for seed in cfg.eval.seeds:
-        dets = build_detectors(cfg.detector.model, seed)
-        frames.append(run_protocol(feat_df, dets, seed, cfg.detector.fpr_target,
-                                   train_tiers=tuple(cfg.eval.train_tiers),
-                                   test_tiers=tuple(cfg.eval.test_tiers),
-                                   n_boot=cfg.eval.n_boot, frac=tuple(cfg.eval.split)))
-    return pd.concat(frames, ignore_index=True)
+def _as_list(x):
+    return [t.strip() for t in x.split(",")] if isinstance(x, str) else list(x)
+
+
+def evaluate_all(cfg, feat_df: pd.DataFrame):
+    """Cross-fitted evaluation repeated over fold assignments. Returns (results, out-of-fold scores of the first repetition)."""
+    frames, oof = [], None
+    for i, seed in enumerate(cfg.eval.seeds):
+        def make(seed=seed):
+            d = build_detectors(cfg.detector.model, seed)
+            if getattr(cfg.eval, "ablations", True):
+                d.update(ablations(cfg.detector.model, seed))
+            return d
+        res, scored = run_protocol(feat_df, make, seed, cfg.detector.fpr_target,
+                                   train_tiers=tuple(_as_list(cfg.eval.train_tiers)),
+                                   test_tiers=tuple(_as_list(cfg.eval.test_tiers)),
+                                   n_boot=cfg.eval.n_boot, k=getattr(cfg.eval, "k_folds", 5))
+        frames.append(res)
+        if i == 0:
+            keep = ["qid", "tier", "pid", "label"] + [c for c in scored.columns if c.startswith(("s_", "f_"))]
+            oof = scored[keep]
+    return pd.concat(frames, ignore_index=True), oof
 
 
 def summarise(res: pd.DataFrame) -> pd.DataFrame:
-    """Mean over seeds (with across-seed std) per detector x tier x metric."""
-    g = res.groupby(["tier", "detector", "metric"])["value"]
-    return g.agg(["mean", "std", "count"]).reset_index()
+    """Mean over repetitions (std across repetitions; mean bootstrap CI) per tier x detector x metric."""
+    g = res.groupby(["tier", "detector", "metric"])
+    return g.agg(mean=("value", "mean"), std=("value", "std"), count=("value", "count"),
+                 lo=("lo", "mean"), hi=("hi", "mean")).reset_index()
+
+
+def significance(res: pd.DataFrame) -> pd.DataFrame:
+    """Paired bootstrap difference (fusion minus detector) with CI and median p across repetitions."""
+    if "ref_minus_this" not in res:
+        return pd.DataFrame()
+    d = res.dropna(subset=["ref_minus_this"])
+    return (d.groupby(["tier", "detector", "metric"])
+              .agg(fusion_minus_detector=("ref_minus_this", "mean"), ci_lo=("diff_lo", "mean"),
+                   ci_hi=("diff_hi", "mean"), median_p=("p_value", "median")).reset_index())
 
 
 def attack_success_rate(sets: List[RetrievedSet], generator) -> float:

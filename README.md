@@ -77,10 +77,16 @@ use a new `run_name` or delete the cached files.
   attention share/density; leave-one-out answer shift; answer entropy. Set-relative z-scores.
 * Detectors: `ppl_filter`, `attn_only_heur` (heuristics); `ppl`, `sem`, `attn`, `internal`
   (learned, same learner); `fusion` (all groups). `detector.ablations()` drops one group at a time.
-* Train on A0 + clean only, test on A0/A1/A2. Splits are by question. Threshold calibrated on
-  held-out benign training passages for a 1% target FPR; test FPR is measured and reported.
-* Metrics: AUROC, TPR at calibrated threshold, measured FPR, query-level detection, cluster
-  bootstrap CIs, paired bootstrap tests vs fusion, mean/std across seeds.
+* **Cross-fitted protocol** (5 folds by question): fit on A0 + clean passages of three folds, calibrate the
+  threshold on clean-set benign passages of a fourth, test on the fifth. Every question is tested once;
+  repeated over 3 fold assignments. Train on A0 only, test on A0/A1/A2 (cross-attack generalisation).
+  Target false-alarm rate 5% per passage (1% is not calibratable with ~100 clean passages); the realised
+  rate is measured and reported.
+* Metrics: AUROC, AUROC within attacked sets, TPR at the calibrated threshold, `fpr_clean`, `fpr_mixed`,
+  query-level detection and false-alarm rates, cluster-bootstrap CIs, paired bootstrap tests vs fusion.
+  Ablations (one signal group removed) are evaluated automatically; `eval.train_tiers=A0,A1,A2 eval.tag=oracle`
+  gives an upper bound. The `filter` stage regenerates answers after removing flagged passages and reports ASR
+  and accuracy (the end-to-end result).
   `evaluate.utility_after_filtering` gives ASR and clean accuracy after removing flagged passages.
 
 ## Known limitations (carry into the report)

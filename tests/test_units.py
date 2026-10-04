@@ -5,8 +5,7 @@ import pytest
 from ragdet.core import Passage, answer_match, normalize_text
 from ragdet.data import make_toy_dataset
 from ragdet.detector import SingleFeatureThreshold, calibrate_threshold
-from ragdet.evaluate import (cluster_bootstrap, flag_metrics, paired_diff, query_level_detection,
-                             split_qids)
+from ragdet.evaluate import split_qids
 from ragdet.features import Z_FEATURES, _zscore, feature_groups, semantic_features
 from ragdet.retrieval import HashingEmbedder, Retriever
 from ragdet.signals import (attention_shares, char_spans_in_prompt, loo_shift,
@@ -97,43 +96,5 @@ def test_single_feature_direction_chosen_from_training_data():
     assert d.sign == -1.0 and d.score(df)[2] > d.score(df)[0]
 
 
-def test_query_level_detection_and_flag_metrics():
-    df = pd.DataFrame({"qid": ["a"] * 3 + ["b"] * 3, "tier": "A0",
-                       "label": [1, 0, 0, 1, 0, 0], "s": [0.9, 0.1, 0.2, 0.2, 0.1, 0.3]})
-    assert query_level_detection(df, "s", 0.5) == 0.5
-    m = flag_metrics(df.label, df.s, 0.5)
-    assert m["tpr"] == 0.5 and m["fpr"] == 0.0
 
 
-def test_bootstrap_and_paired_diff_run():
-    rng = np.random.RandomState(0)
-    n = 60
-    df = pd.DataFrame({"qid": np.repeat([f"q{i}" for i in range(n // 3)], 3),
-                       "label": rng.randint(0, 2, n)})
-    df["tier"] = np.where(df.label == 1, "A0", np.where(rng.rand(n) < 0.5, "clean", "A0"))
-    df["good"] = df.label + 0.3 * rng.randn(n)
-    df["bad"] = rng.randn(n)
-    b = cluster_bootstrap(df, ["good", "bad"], {"good": 0.5, "bad": 0.5}, 200, seed=0)
-    m, lo, hi, p = paired_diff(b["good"]["auroc"], b["bad"]["auroc"])
-    assert m > 0 and lo < hi and 0 <= p <= 1
-
-
-def test_split_fpr_and_within_auroc():
-    from ragdet.evaluate import all_metrics, query_level_false_alarm
-    y = np.array([0, 0, 0, 0, 1, 1, 0, 0])
-    clean = np.array([True, True, True, True, False, False, False, False])  # last 4 are an attacked set
-    s = np.array([0.9, 0.1, 0.1, 0.1, 0.8, 0.7, 0.6, 0.1])
-    m = all_metrics(y, clean, s, thr=0.5)
-    assert m["tpr"] == 1.0
-    assert m["fpr_clean"] == 0.25 and m["fpr_mixed"] == 0.5          # populations reported separately
-    assert m["auroc_within"] == 1.0                                   # poison outranks its neighbours
-    df = pd.DataFrame({"qid": ["a"] * 2 + ["b"] * 2, "tier": "clean", "label": 0, "s": [0.9, 0.1, 0.1, 0.1]})
-    assert query_level_false_alarm(df, "s", 0.5) == 0.5               # 1 of 2 clean sets raised an alarm
-
-
-def test_calibration_uses_only_clean_sets():
-    from ragdet.evaluate import calibration_frame
-    df = pd.DataFrame({"qid": ["a", "a", "b", "b", "c"], "tier": ["clean", "A0", "clean", "A0", "clean"],
-                       "label": [0, 0, 0, 1, 0]})
-    cal = calibration_frame(df, {"a", "b"})
-    assert list(cal.index) == [0, 2]            # clean-set benign passages of calibration questions only

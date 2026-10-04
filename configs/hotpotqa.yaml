@@ -34,8 +34,10 @@ detector:
   model: logreg                      # logreg | gbdt
   fpr_target: 0.05
 eval:
-  seeds: [0, 1, 2, 3, 4]
+  seeds: [0, 1, 2]
   n_boot: 1000
-  split: [0.5, 0.2, 0.3]             # fit / calibrate / test, split by question
+  k_folds: 5                         # cross-fitting: fit on 3 folds, calibrate on 1, test on 1 (split by question)
+  ablations: true                    # also evaluate fusion with one signal group removed
+  filter_detectors: [fusion, sem, internal, ppl_filter]
   train_tiers: [A0]
   test_tiers: [A0, A1, A2]
