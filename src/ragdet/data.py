@@ -29,6 +29,13 @@ def write_jsonl(path: str, rows: List[dict]) -> None:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
+def append_jsonl(path: str, row: dict) -> None:
+    """Append one record and flush, so an interrupted job loses at most the record in progress."""
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        f.flush()
+
+
 def load_beir_corpus(path: str) -> Dict[str, str]:
     """BEIR corpus.jsonl: {'_id', 'title', 'text'} -> {id: 'title. text'}."""
     corpus = {}

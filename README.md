@@ -41,6 +41,7 @@ Open `notebooks/colab_run.ipynb` in Colab (GitHub tab, or
 choose a T4 GPU runtime and run the cells in order. Uses `configs/small_gpu.yaml` (Qwen2.5-3B in fp16,
 NQ only). The raw 1.5 GB corpus is kept on Colab's disposable local disk and only read once by the `prepare` stage; the small sub-corpus, embeddings, models and results are stored on Google Drive. Do the 10-question run first.
 The 6 GB model is cached on Colab's local disk (re-downloads in ~1 min); never on Drive, which may be nearly full.
+`attack` and `a2` checkpoint after every question (`*_partial.jsonl`, guarded by a settings fingerprint) and resume after a disconnect.
 Finished stages are cached on disk (`sets_*.jsonl`, `features_<tier>.csv`): if you change the attack,
 use a new `run_name` or delete the cached files.
 
