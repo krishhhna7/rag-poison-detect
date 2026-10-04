@@ -132,3 +132,17 @@ def summarise(res: pd.DataFrame) -> pd.DataFrame:
 
 def attack_success_rate(sets: List[RetrievedSet], generator) -> float:
     return float(np.mean([answer_match(generator.answer(s.question, s.passages), s.target) for s in sets]))
+
+
+def attack_summary(feat_df: pd.DataFrame, targets: List[Target]) -> pd.DataFrame:
+    """Per tier: number of sets, mean poison passages in the top-k, attack success rate (ASR)
+    and answer accuracy. Needed to interpret detection results: a stealthier attack that rarely
+    succeeds is a weak attack, not a strong one."""
+    by_q = {t.qid: t for t in targets}
+    sets = feat_df.groupby(["tier", "qid"]).agg(n_poison=("label", "sum"),
+                                                answer=("answer", "first")).reset_index()
+    sets["answer"] = sets["answer"].fillna("").astype(str)
+    sets["asr"] = [answer_match(a, by_q[q].target) for a, q in zip(sets.answer, sets.qid)]
+    sets["acc"] = [answer_match(a, by_q[q].correct) for a, q in zip(sets.answer, sets.qid)]
+    return (sets.groupby("tier").agg(n_sets=("qid", "count"), poison_in_topk=("n_poison", "mean"),
+                                     asr=("asr", "mean"), accuracy=("acc", "mean")).reset_index())

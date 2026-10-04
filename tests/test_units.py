@@ -110,8 +110,22 @@ def test_bootstrap_and_paired_diff_run():
     n = 60
     df = pd.DataFrame({"qid": np.repeat([f"q{i}" for i in range(n // 3)], 3),
                        "label": rng.randint(0, 2, n)})
+    df["tier"] = np.where(df.label == 1, "A0", np.where(rng.rand(n) < 0.5, "clean", "A0"))
     df["good"] = df.label + 0.3 * rng.randn(n)
     df["bad"] = rng.randn(n)
     b = cluster_bootstrap(df, ["good", "bad"], {"good": 0.5, "bad": 0.5}, 200, seed=0)
     m, lo, hi, p = paired_diff(b["good"]["auroc"], b["bad"]["auroc"])
     assert m > 0 and lo < hi and 0 <= p <= 1
+
+
+def test_split_fpr_and_within_auroc():
+    from ragdet.evaluate import all_metrics, query_level_false_alarm
+    y = np.array([0, 0, 0, 0, 1, 1, 0, 0])
+    clean = np.array([True, True, True, True, False, False, False, False])  # last 4 are an attacked set
+    s = np.array([0.9, 0.1, 0.1, 0.1, 0.8, 0.7, 0.6, 0.1])
+    m = all_metrics(y, clean, s, thr=0.5)
+    assert m["tpr"] == 1.0
+    assert m["fpr_clean"] == 0.25 and m["fpr_mixed"] == 0.5          # populations reported separately
+    assert m["auroc_within"] == 1.0                                   # poison outranks its neighbours
+    df = pd.DataFrame({"qid": ["a"] * 2 + ["b"] * 2, "tier": "clean", "label": 0, "s": [0.9, 0.1, 0.1, 0.1]})
+    assert query_level_false_alarm(df, "s", 0.5) == 0.5               # 1 of 2 clean sets raised an alarm

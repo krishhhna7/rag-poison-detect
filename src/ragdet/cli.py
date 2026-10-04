@@ -112,12 +112,22 @@ def cmd_a2(cfg, c):
 
 def cmd_evaluate(cfg, c=None):
     df = pd.read_csv(_feat_path(cfg))
+    pd.set_option("display.width", 170)
+    tpath = getattr(cfg.data, "targets_path", None)
+    if tpath and os.path.exists(tpath):
+        from .data import load_targets
+        summ_atk = P.attack_summary(df, load_targets(tpath, getattr(cfg.data, "drop_binary", False)))
+        summ_atk.to_csv(P.out_path(cfg, "attack_summary.csv"), index=False)
+        print("ATTACK SUMMARY (poison_in_topk = mean poisoned passages among the retrieved top-k)")
+        print(summ_atk.to_string(index=False), "\n")
     res = P.evaluate_all(cfg, df)
     res.to_csv(P.out_path(cfg, "results_raw.csv"), index=False)
     summ = P.summarise(res)
     summ.to_csv(P.out_path(cfg, "results_summary.csv"), index=False)
-    pd.set_option("display.width", 160)
-    print(summ[summ.metric.isin(["auroc", "tpr", "fpr", "query_tpr"])].to_string(index=False))
+    show = ["auroc", "auroc_within", "tpr", "fpr_clean", "fpr_mixed", "query_tpr", "query_fpr_clean"]
+    print("DETECTION (mean over seeds)")
+    print(summ[summ.metric.isin(show)].pivot_table(index=["tier", "detector"], columns="metric",
+                                                  values="mean").round(3)[[m for m in show]].to_string())
 
 
 def cmd_toy(cfg, c):

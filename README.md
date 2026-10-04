@@ -83,8 +83,12 @@ use a new `run_name` or delete the cached files.
 
 ## Known limitations (carry into the report)
 * Sub-corpus (gold + random distractors) rather than the full multi-million corpus.
-* With `n_poison=5` and `top_k=5`, all retrieved passages can be poisoned, weakening set-relative
-  features; ablate `n_poison` in {1, 3, 5}.
+* **Observed in the 10-question pilot:** with `n_poison=5` and `top_k=5`, A0 sets were 100% poison (no clean
+  neighbours), which makes per-passage detection degenerate. The main setting is therefore `n_poison=3`;
+  `n_poison` in {1, 5} are ablations. Attack success must be reported per tier (pilot: A0 10/10, A1/A2 7/10).
+* **False-alarm target is 5%, not 1%:** with ~100 questions there are only ~100 clean calibration passages.
+  Benign passages are reported in two populations (`fpr_clean`: clean sets; `fpr_mixed`: next to poison),
+  plus `auroc_within` (poison vs its neighbours in the same set) and set-level `query_fpr_clean`.
 * A1 rewrites drop the question prefix, so some may fail retrieval; the fallback rate is printed
   by the `attack` stage and must be reported.
 * A2 attacker queries a detector fitted on the same data distribution (strong attacker).

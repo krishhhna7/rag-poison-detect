@@ -25,15 +25,15 @@ generator:
 ppl:
   hf_id: gpt2
 attack:
-  n_poison: 5                        # ablate over {1, 3, 5}; released texts give at most 5
+  n_poison: 3                        # main setting: mixed poison/clean top-5. Ablate over {1, 5}; released texts give at most 5
   use_released_poison: true          # A0 uses PoisonedRAG's released poison texts
   prepend_question: true             # black-box: question text + poison text
   n_candidates: 8                    # rewrites per slot for A1/A2
 detector:
   model: logreg                      # logreg | gbdt
-  fpr_target: 0.01
+  fpr_target: 0.05                   # 1% is not calibratable with ~100 clean passages; see README
 eval:
-  seeds: [0, 1, 2]
+  seeds: [0, 1, 2, 3, 4]
   n_boot: 1000
   split: [0.5, 0.2, 0.3]             # fit / calibrate / test, split by question
   train_tiers: [A0]
