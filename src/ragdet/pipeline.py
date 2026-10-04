@@ -17,6 +17,13 @@ from .detector import LearnedDetector, build_detectors, calibrate_threshold
 from .features import feature_groups
 
 
+def a0(cfg, t, llm):
+    """A0 poison for target ``t`` honouring config options (released texts, question prefix)."""
+    return attacks.attack_a0(t, llm, cfg.attack.n_poison,
+                             getattr(cfg.attack, "use_released_poison", True),
+                             getattr(cfg.attack, "prepend_question", True))
+
+
 def _tqdm(it):
     try:
         from tqdm import tqdm
@@ -55,7 +62,7 @@ def build_attack_sets(cfg, targets: List[Target], retriever, llm, ppl_fn, tiers=
     diag = {"a1_fallback_slots": 0, "a1_slots": 0}
     for t in _tqdm(targets):
         out["clean"].append(make_clean_set(t, retriever, k))
-        seeds = attacks.attack_a0(t, llm, cfg.attack.n_poison)
+        seeds = a0(cfg, t, llm)
         if "A0" in tiers:
             out["A0"].append(make_poisoned_set(t, retriever, k, seeds, "A0"))
         if "A1" in tiers:
@@ -88,7 +95,7 @@ def build_a2_sets(cfg, targets: List[Target], a0_sets: List[RetrievedSet], retri
     out, stats = [], {"success": 0, "n": 0}
     for t in _tqdm(targets):
         seeds = [p for p in by_q[t.qid].passages if p.is_poison] or \
-                attacks.attack_a0(t, llm, cfg.attack.n_poison)
+                a0(cfg, t, llm)
 
         def objective(cand: List[Passage]):
             rs = make_poisoned_set(t, retriever, k, cand, "A2")

@@ -18,7 +18,7 @@ import pandas as pd
 from . import pipeline as P
 from .config import load_config
 from .core import set_seed
-from .data import build_subcorpus, load_beir_corpus, load_targets, make_toy_dataset, read_jsonl
+from .data import build_subcorpus, load_beir_corpus, load_qrels, load_targets, make_toy_dataset, read_jsonl
 from .retrieval import Retriever, build_embedder
 
 
@@ -36,8 +36,11 @@ def build_components(cfg):
     from .generation import HFGenerator
     from .perplexity import HFPerplexity
     corpus = load_beir_corpus(cfg.data.corpus_path)
-    targets = load_targets(cfg.data.targets_path)[: cfg.data.n_targets]
-    gold = [t.qid for t in targets]  # PoisonedRAG target ids match BEIR ids
+    targets = load_targets(cfg.data.targets_path, getattr(cfg.data, "drop_binary", False))[: cfg.data.n_targets]
+    qrels = load_qrels(cfg.data.qrels_path)   # query id -> gold corpus ids (ids differ from query ids)
+    gold = [g for t in targets for g in qrels.get(t.qid, [])]
+    missing = sum(t.qid not in qrels for t in targets)
+    print(f"{len(targets)} targets, {len(gold)} gold passages, {missing} targets without qrels")
     ids, texts = build_subcorpus(corpus, gold, cfg.data.corpus_size, cfg.seed)
     emb = build_embedder(cfg.retriever)
     cache = os.path.join(cfg.paths.workspace, "cache", f"{cfg.data.dataset}_{cfg.retriever.name}_{len(ids)}.npy")

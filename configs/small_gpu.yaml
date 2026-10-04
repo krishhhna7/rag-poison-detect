@@ -6,12 +6,13 @@ paths:
 data:
   dataset: nq
   corpus_path: "${RAGDET_ROOT}/data/nq/corpus.jsonl"
-  targets_path: "${RAGDET_ROOT}/data/nq/targets.jsonl"
+  qrels_path: "${RAGDET_ROOT}/data/nq/qrels/test.tsv"
+  targets_path: "${RAGDET_ROOT}/data/nq/targets.json"
   n_targets: 100
   corpus_size: 50000
 retriever: {name: contriever, hf_id: facebook/contriever, pooling: mean, normalize: false, top_k: 5}
 generator: {hf_id: "Qwen/Qwen2.5-3B-Instruct", dtype: float16, max_new_tokens: 24, load_4bit: false, attn_layers: last_half}
 ppl: {hf_id: gpt2}
-attack: {n_poison: 5, n_candidates: 4}
+attack: {n_poison: 5, n_candidates: 4, use_released_poison: true, prepend_question: true}
 detector: {model: logreg, fpr_target: 0.01}
 eval: {seeds: [0, 1, 2], n_boot: 500, split: [0.5, 0.2, 0.3], train_tiers: [A0], test_tiers: [A0, A1, A2]}

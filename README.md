@@ -13,7 +13,9 @@ generator-internal signals with set-level semantic consistency degrade more grac
 | Config, retrieval + poison injection, features, detectors, evaluation protocol | Unit-tested on CPU (`pytest`) |
 | Whole pipeline plumbing | Runs end to end on a synthetic toy world with test doubles (`toy` stage) |
 | `HFGenerator` (attention extraction, leave-one-out), `HFEmbedder`, `HFPerplexity` | **Written but NOT yet run on a GPU.** Expect to debug memory/shape issues on first run |
-| Real datasets, real results | **None yet.** Toy numbers are meaningless |
+| Target-file loader | Verified against the real released NQ and HotpotQA files (100 questions each) |
+| Corpus loader, qrels-based gold lookup | Written to the BEIR standard layout; **not yet run on the real BEIR zip** |
+| Real results | **None yet.** Toy numbers are meaningless |
 
 ## Layout
 ```
@@ -34,13 +36,26 @@ RAGDET_ROOT=./workspace python -m ragdet.cli toy --config configs/toy.yaml
 ```
 
 ## Real run
-1. Data (in `$RAGDET_ROOT/data/nq/`): BEIR-format `corpus.jsonl` and a PoisonedRAG-format
-   `targets.jsonl` (fields `id, question, correct answer, incorrect answer`). Verify the
-   download sources from the BEIR and PoisonedRAG repositories; target ids must match BEIR ids.
-2. `source setup_env.sh` (fill in the CONFIRM items), then `bash scripts/run_all.sh configs/default.yaml`.
+1. **Data** (verified formats; see "Data sources" below):
+   `source setup_env.sh && bash scripts/download_data.sh nq`
+   gives `$RAGDET_ROOT/data/nq/{corpus.jsonl, qrels/test.tsv, targets.json}`.
+2. `bash scripts/run_all.sh configs/default.yaml` (or `configs/small_gpu.yaml`, `configs/hotpotqa.yaml`).
 3. Outputs land in `$RAGDET_ROOT/runs/<run_name>/`: `sets_*.jsonl`, `features.csv`,
    `results_raw.csv` (per seed, with bootstrap CIs and paired tests), `results_summary.csv`.
-   Copy these back to your own machine and commit small result files.
+   Copy these back to your own machine and commit the small result files.
+
+## Data sources
+* **Targets + poison texts:** `results/adv_targeted_results/{nq,hotpotqa,msmarco}.json` in
+  github.com/sleeepeer/PoisonedRAG. Verified: each file is ONE JSON object of 100 questions
+  keyed by id, with fields `id, question, "correct answer", "incorrect answer", adv_texts` (5
+  released poison texts per question). A0 uses these texts directly, so it is reproducible.
+* **Corpus:** BEIR `nq` / `hotpotqa` zips (URL taken from PoisonedRAG's `prepare_dataset.py`).
+  Query ids in the targets file (e.g. `test1`) are BEIR *query* ids, so gold passages are found via
+  `qrels/test.tsv`, not by id equality.
+* **Not yet verified:** the BEIR zip layout on disk (we assume the standard `corpus.jsonl`,
+  `qrels/test.tsv`) and the download size. Check after downloading.
+* **Answer matching** uses whole-word containment. HotpotQA has 15/100 yes/no targets, so
+  `configs/hotpotqa.yaml` drops them (85 remain); NQ keeps 97/100 if you set `drop_binary: true`.
 
 ## Experimental protocol (summarised)
 * Attack tiers: **A0** PoisonedRAG-style; **A1** fluency-preserving rewrites chosen for low

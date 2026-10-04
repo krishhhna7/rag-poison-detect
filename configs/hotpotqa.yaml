@@ -1,14 +1,15 @@
 # Main experiment config (cluster / 24GB GPU). Override on the CLI: --set generator.hf_id=Qwen/Qwen2.5-3B-Instruct
-run_name: nq_qwen7b_contriever
+run_name: hotpotqa_qwen7b_contriever
 seed: 0
 paths:
   workspace: "${RAGDET_ROOT}"        # set to the large-storage area on the cluster
 data:
-  dataset: nq                        # nq | hotpotqa | toy
-  corpus_path: "${RAGDET_ROOT}/data/nq/corpus.jsonl"       # BEIR-format corpus (see README)
-  qrels_path: "${RAGDET_ROOT}/data/nq/qrels/test.tsv"       # BEIR qrels: maps query id -> gold passages
-  targets_path: "${RAGDET_ROOT}/data/nq/targets.json"       # PoisonedRAG release file (see README)
+  dataset: hotpotqa                        # nq | hotpotqa | toy
+  corpus_path: "${RAGDET_ROOT}/data/hotpotqa/corpus.jsonl"       # BEIR-format corpus (see README)
+  qrels_path: "${RAGDET_ROOT}/data/hotpotqa/qrels/test.tsv"       # BEIR qrels: maps query id -> gold passages
+  targets_path: "${RAGDET_ROOT}/data/hotpotqa/targets.json"       # PoisonedRAG release file (see README)
   n_targets: 100
+  drop_binary: true                  # yes/no answers are matched too easily by chance (85 of 100 remain)
   corpus_size: 100000                # sub-corpus = gold + random distractors (documented limitation)
 retriever:
   name: contriever                   # contriever | bge | hashing

@@ -12,7 +12,7 @@ import json
 import random
 from typing import Dict, List, Tuple
 
-from .core import Target
+from .core import Target, normalize_text
 
 
 # ---- readers ------------------------------------------------------------
@@ -37,19 +37,47 @@ def load_beir_corpus(path: str) -> Dict[str, str]:
     return corpus
 
 
-def load_targets(path: str) -> List[Target]:
-    """Targets JSONL with fields: id, question, correct answer, incorrect answer.
+def load_qrels(path: str) -> Dict[str, List[str]]:
+    """BEIR qrels TSV (query-id, corpus-id, score) -> {query_id: [relevant corpus ids]}."""
+    out: Dict[str, List[str]] = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3 or parts[0] == "query-id":
+                continue
+            if float(parts[2]) > 0:
+                out.setdefault(parts[0], []).append(parts[1])
+    return out
 
-    Field names follow the PoisonedRAG release; ``correct``/``target`` aliases
-    are also accepted. The 'correct answer' field may be a string or a list.
+
+def load_targets(path: str, drop_binary: bool = False) -> List[Target]:
+    """Load attack targets.
+
+    Accepts the PoisonedRAG release format (verified): ONE JSON object mapping
+    id -> {id, question, "correct answer", "incorrect answer", adv_texts[5]}; also a JSON list
+    or JSONL of such records. ``drop_binary`` removes yes/no questions, whose answers are
+    too easy to match by chance (15/100 in the HotpotQA file, 3/100 in NQ).
     """
+    with open(path, "r", encoding="utf-8") as f:
+        raw = f.read().strip()
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict) and "question" not in obj:
+            rows = [dict(v, id=v.get("id", k)) for k, v in obj.items()]
+        else:
+            rows = obj if isinstance(obj, list) else [obj]
+    except json.JSONDecodeError:  # JSONL
+        rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
     out = []
-    for r in read_jsonl(path):
+    for r in rows:
         correct = r.get("correct answer", r.get("correct"))
         if isinstance(correct, list):
             correct = correct[0]
         target = r.get("incorrect answer", r.get("target"))
-        out.append(Target(str(r["id"]), r["question"], str(correct), str(target)))
+        t = Target(str(r["id"]), r["question"], str(correct), str(target), list(r.get("adv_texts", [])))
+        if drop_binary and (normalize_text(t.correct) in ("yes", "no") or normalize_text(t.target) in ("yes", "no")):
+            continue
+        out.append(t)
     return out
 
 

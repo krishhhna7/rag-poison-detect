@@ -31,11 +31,24 @@ def _pid(kind: str, qid: str, i: int, c: int = 0) -> str:
 
 
 # --------------------------------------------------------------------------
-def attack_a0(t: Target, llm, n_poison: int) -> List[Passage]:
-    """Black-box PoisonedRAG-style: question text + supporting text (retrieval + generation parts)."""
-    texts = llm.complete(A0_PROMPT.format(q=t.question, a=t.target), max_new_tokens=80,
-                         temperature=0.9, n=n_poison)
-    return [Passage(_pid("A0", t.qid, i), f"{t.question} {x.strip()}", True) for i, x in enumerate(texts)]
+def attack_a0(t: Target, llm, n_poison: int, use_released: bool = True,
+              prepend_question: bool = True) -> List[Passage]:
+    """Black-box PoisonedRAG-style poison passages.
+
+    By default uses the *released* poison texts (5 per question) from the PoisonedRAG repo, which
+    makes A0 reproducible and identical to the original attack's text. Falls back to generating
+    them with ``llm`` if none are available. Following the paper's black-box attack, the question
+    is prepended as the retrieval-enabling part (set ``prepend_question=False`` to disable).
+    NOTE: the prepend convention is taken from the paper's description; verify against their
+    ``src/attack.py`` before claiming exact parity.
+    """
+    if use_released and t.adv_texts:
+        texts = list(t.adv_texts[:n_poison])
+    else:
+        texts = llm.complete(A0_PROMPT.format(q=t.question, a=t.target), max_new_tokens=80,
+                             temperature=0.9, n=n_poison)
+    return [Passage(_pid("A0", t.qid, i), f"{t.question} {x.strip()}" if prepend_question else x.strip(), True)
+            for i, x in enumerate(texts)]
 
 
 def candidate_columns(t: Target, seeds: Sequence[Passage], llm, retriever, ppl_fn,
