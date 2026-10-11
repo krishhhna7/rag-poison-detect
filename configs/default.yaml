@@ -37,6 +37,7 @@ eval:
   n_boot: 1000
   k_folds: 5                         # cross-fitting: fit on 3 folds, calibrate on 1, test on 1 (split by question)
   ablations: true                    # also evaluate fusion with one signal group removed
-  filter_detectors: [fusion, sem, internal, ppl_filter]
+  filter_detectors: [fusion, sem, internal, ppl_filter, fusion_minus_ppl]
+  report_runs: [nq_qwen3b_contriever, nq_qwen3b_n1]   # run folders included in analysis_outputs.txt
   train_tiers: [A0]
   test_tiers: [A0, A1, A2]

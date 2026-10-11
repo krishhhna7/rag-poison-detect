@@ -46,5 +46,7 @@ def test_changed_settings_ignore_stale_partial(tmp_path, monkeypatch, capsys):
     cfg = os.path.join(os.path.dirname(__file__), "..", "configs", "toy.yaml")
     _run("attack", cfg)
     capsys.readouterr()
-    cli.main(["attack", "--config", cfg, "--set", "attack.n_poison=2"])   # different setting, same run name
-    assert "resuming" not in capsys.readouterr().out                       # old partial rows must not be reused
+    import pytest
+    with pytest.raises(SystemExit) as e:                                    # different setting, same run name
+        cli.main(["attack", "--config", cfg, "--set", "attack.n_poison=2"])
+    assert "NEW run_name" in str(e.value)                                   # refuses to mix old and new results

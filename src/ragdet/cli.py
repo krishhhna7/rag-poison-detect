@@ -7,6 +7,7 @@ Stages (each saves to <workspace>/runs/<run_name>/ so a crashed job can resume):
   a2        run the detector-in-the-loop attack, then append A2 features
   evaluate  cross-fitted train/calibrate/test of all detectors (CPU), write results tables
   filter    ASR and accuracy after removing flagged passages (GPU)
+  report    write analysis_outputs.txt with every table for the report (CPU)
   toy       whole pipeline on the synthetic CPU-only dataset (plumbing check, NOT results)
 """
 from __future__ import annotations
@@ -71,7 +72,25 @@ def cmd_prepare(cfg, c):
     print("Prepare done: sub-corpus and embeddings are cached. The raw 1.5 GB corpus is no longer needed.")
 
 
+def cmd_report(cfg, c=None):
+    """Write analysis_outputs.txt (all report tables) from saved result files. CPU only."""
+    from .analysis import make_report
+    runs = P._as_list(getattr(cfg.eval, "report_runs", [cfg.run_name]))
+    out = os.path.join(cfg.paths.workspace, "analysis_outputs.txt")
+    print(make_report(cfg.paths.workspace, runs, out))
+    print("\nSaved:", out)
+
+
 def cmd_attack(cfg, c):
+    # Guard: never silently rebuild sets that features/a2 were already computed from.
+    sets_a1 = P.out_path(cfg, "sets_A1.jsonl")
+    if os.path.exists(sets_a1):
+        partial = P.out_path(cfg, "attack_partial.jsonl")
+        if not P.load_partial(partial, P.fingerprint(cfg)):
+            raise SystemExit(
+                f"Run '{cfg.run_name}' already has attack sets that were NOT built with these settings "
+                "(or by an older version). Re-running would mix new poison passages with old features. "
+                "Use a NEW run_name (e.g. --set run_name=my_new_run) or skip this stage.")
     sets, diag = P.build_attack_sets(cfg, c["targets"], c["retriever"], c["llm"], c["ppl_fn"])
     for name, s in sets.items():
         P.save_sets(cfg, name, s)
@@ -176,10 +195,11 @@ def cmd_toy(cfg, c):
     cmd_a2(cfg, c)
     cmd_evaluate(cfg)
     cmd_filter(cfg, c)
+    cmd_report(cfg)
     print("\nNOTE: toy run uses test doubles; these numbers only prove the plumbing works.")
 
 
-STAGES = {"prepare": cmd_prepare, "filter": cmd_filter, "attack": cmd_attack, "features": cmd_features, "a2": cmd_a2, "evaluate": cmd_evaluate, "toy": cmd_toy}
+STAGES = {"report": cmd_report, "prepare": cmd_prepare, "filter": cmd_filter, "attack": cmd_attack, "features": cmd_features, "a2": cmd_a2, "evaluate": cmd_evaluate, "toy": cmd_toy}
 
 
 def main(argv=None):
@@ -198,7 +218,7 @@ def main(argv=None):
         ov[k] = v
     cfg = load_config(a.config, ov)
     set_seed(cfg.seed)
-    comps = None if a.stage == "evaluate" else build_components(cfg, need_generator=a.stage != "prepare")
+    comps = None if a.stage in ("evaluate", "report") else build_components(cfg, need_generator=a.stage != "prepare")
     STAGES[a.stage](cfg, comps)
 
 
